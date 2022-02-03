@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<style>
+    .lds-roller {
+        display: inline-block;
+        position: relative;
+        width: 80px;
+        height: 80px;
+      }
+      .lds-roller div {
+        animation: lds-roller 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+        transform-origin: 40px 40px;
+      }
+      .lds-roller div:after {
+        content: " ";
+        display: block;
+        position: absolute;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #fff;
+        margin: -4px 0 0 -4px;
+      }
+      .lds-roller div:nth-child(1) {
+        animation-delay: -0.036s;
+      }
+      .lds-roller div:nth-child(1):after {
+        top: 63px;
+        left: 63px;
+      }
+      .lds-roller div:nth-child(2) {
+        animation-delay: -0.072s;
+      }
+      .lds-roller div:nth-child(2):after {
+        top: 68px;
+        left: 56px;
+      }
+      .lds-roller div:nth-child(3) {
+        animation-delay: -0.108s;
+      }
+      .lds-roller div:nth-child(3):after {
+        top: 71px;
+        left: 48px;
+      }
+      .lds-roller div:nth-child(4) {
+        animation-delay: -0.144s;
+      }
+      .lds-roller div:nth-child(4):after {
+        top: 72px;
+        left: 40px;
+      }
+      .lds-roller div:nth-child(5) {
+        animation-delay: -0.18s;
+      }
+      .lds-roller div:nth-child(5):after {
+        top: 71px;
+        left: 32px;
+      }
+      .lds-roller div:nth-child(6) {
+        animation-delay: -0.216s;
+      }
+      .lds-roller div:nth-child(6):after {
+        top: 68px;
+        left: 24px;
+      }
+      .lds-roller div:nth-child(7) {
+        animation-delay: -0.252s;
+      }
+      .lds-roller div:nth-child(7):after {
+        top: 63px;
+        left: 17px;
+      }
+      .lds-roller div:nth-child(8) {
+        animation-delay: -0.288s;
+      }
+      .lds-roller div:nth-child(8):after {
+        top: 56px;
+        left: 12px;
+      }
+      @keyframes lds-roller {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+</style>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+
+            <div class="alert alert-success" role="alert" id="alertSuccess" style="display:none;">
+                Your payment was successful!
+            </div>
+
+            <div class="alert alert-danger" role="alert" id="alertFailure" style="display:none;">
+                Your payment failed. Please try again.
+            </div>
+
+            <div class="text-center py-3">
+
+                <div class="lds-roller" style="margin:auto; display:none;"  id="loader">
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                </div>
+            </div>
+
+            
+
+            <div id="paymentInfo">
+                <p>Order Total: <strong>$ {{ order.get_total }}</strong></p>
+                <h4>Select a payment method </h4>
+                <div id="paypal-button-container"></div>
+            </div>
+
+            
+
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
+
+{% block scripts %}
+
+    <script 
+        src="https://www.paypal.com/sdk/js?&client-id={{ PAYPAL_CLIENT_ID }}">
+    </script>
+
+    <script> 
+
+        const loader= document.getElementById('loader');
+
+        const paymentInfo = document.getElementById('paymentInfo');
+
+        function toggleLoader(on){
+            loader.style.display = on ? 'block' : 'none';
+            paymentInfo.style.display = on ? 'none' : 'block';
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    // Does this cookie string begin with the name we want?
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        const csrftoken = getCookie('csrftoken');
+        
+        function sendOrderConfirmed(){
+            return fetch(" {% url 'cart:confirm-order' %}", {
+                method: 'POST',
+                body: JSON.stringify(details),
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrftoken
+                }
+            } )
+        }
+        
+        paypal.Buttons({
+        createOrder: function(data, actions) {
+            return actions.order.create({
+                purchase_units: [{
+                    amount: {
+                        value: '{{ order.get_total }}' // Can reference variables or functions. Example: `value: document.getElementById('...').value`
+                        }
+                    }]
+                });
+            },
+
+            onApprove: function(data, actions) {
+                toggleLoader(true);
+                return actions.order.capture().then(function(detalis) {
+                    sendOrderConfirmed(details).then(res => {
+
+                        toggleLoader(false);
+                        const alertSuccess = document.getElementById('alertSuccess');
+                        alertSuccess.style.display = 'block';
+                       
+                        setTimeout(function() => {
+                            window.location.replace("{{ CALLBACK_URL }}");
+                        }, 3000 );
+                    })
+                })
+                .catch(err => {
+                    const alertFailure = document.getElementById('alertFailure');
+                    alertFailure.style.display = 'block';
+                })
+                .finally(() => toggleLoader(false));
+            }
+            
+        }).render('#paypal-button-container'); </script>
+    </script>
+
+{% endblock %}
